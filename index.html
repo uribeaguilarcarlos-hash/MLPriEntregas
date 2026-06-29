@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Herramientas CEDIS</title>
+    <style>
+        /* Diseño minimalista */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 450px;
+        }
+        h1 { font-size: 24px; margin-bottom: 20px; color: #000; }
+        .btn {
+            background-color: #000;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 15px;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        .btn:hover { background-color: #444; }
+        input[type="file"] { margin: 20px 0; width: 100%; }
+        
+        /* Estilos de la ventana emergente (Modal) */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            height: 100%; 
+            background-color: rgba(0,0,0,0.5); 
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+            position: relative;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover { color: #000; }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin-top: 15px;
+            padding: 10px;
+            font-family: monospace;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: none;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Gestión de Reportes</h1>
+    <p>Sube el archivo de relación para extraer el formato de texto.</p>
+    
+    <input type="file" id="archivoExcel" accept=".xlsx, .xls, .xlsm">
+    <button class="btn" onclick="generarReporte()">Generar Texto para Pegar</button>
+    
+    </div>
+
+<div id="miModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="cerrarModal()">&times;</span>
+        <h2>Reporte Generado</h2>
+        <textarea id="textoResultado" readonly></textarea>
+        <button class="btn" onclick="copiarTexto()">Copiar al Portapapeles</button>
+    </div>
+</div>
+
+<script>
+    async function generarReporte() {
+        const archivoInput = document.getElementById('archivoExcel');
+        if (archivoInput.files.length === 0) {
+            alert("Peca, necesitas seleccionar un archivo primero.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("archivo", archivoInput.files[0]);
+
+        try {
+            // Conectamos la web con tu motor en Python (corriendo localmente por ahora)
+            const response = await fetch("http://localhost:8000/generar-reporte/", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                alert(data.error);
+            } else {
+                // Si todo sale bien, mostramos el modal con el texto
+                document.getElementById('textoResultado').value = data.texto_generado;
+                abrirModal();
+            }
+        } catch (error) {
+            alert("Error conectando con el servidor. ¿Seguro que encendiste el backend de Python?");
+        }
+    }
+
+    function abrirModal() { document.getElementById('miModal').style.display = "block"; }
+    function cerrarModal() { document.getElementById('miModal').style.display = "none"; }
+    
+    function copiarTexto() {
+        const texto = document.getElementById('textoResultado');
+        texto.select();
+        document.execCommand("copy");
+        alert("¡Texto copiado!");
+    }
+</script>
+
+</body>
+</html>
