@@ -1,11 +1,13 @@
+import pandas as pd
+import numpy as np
+import io
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-import pandas as pd
-import io
 
+# Aquí inicializamos la aplicación
 app = FastAPI(title="API de Gestión y Horarios CEDIS")
 
-# Esto es súper importante para que tu frontend (web) pueda hablar con este backend sin bloqueos de seguridad
+# Esto permite que tu página web se comunique con este backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -13,33 +15,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def ruta_raiz():
-    return {"mensaje": "¡El backend está funcionando al 100%!"}
-
-# 1. Endpoint para procesar el Excel y devolver el texto
+# --- AQUÍ ESTÁ EL ENDPOINT DEL QUE HABLAMOS ---
+# Fíjate cómo /generar-reporte/ es solo la instrucción que le dice a la app 
+# qué hacer cuando la página web llame a esta dirección.
 @app.post("/generar-reporte/")
 async def generar_reporte(archivo: UploadFile = File(...)):
-    # Leemos el Excel que el usuario suba desde la página web
+    # Leemos el archivo que llega desde la página web
     contenido = await archivo.read()
-    df = pd.read_excel(io.BytesIO(contenido))
     
-    # Aquí vamos a meter la lógica de extracción de datos. 
-    # Justo en esta parte es donde aplicaremos la regla para que el reporte le dé prioridad al campo "BROKER" sobre "CONSIGNATARIO".
+    try:
+        # Lo pasamos a un DataFrame de pandas
+        df = pd.read_excel(io.BytesIO(contenido))
+    except Exception as e:
+        return {"error": "Hubo un problema leyendo el archivo. Asegúrate de que sea un Excel válido."}
     
-    # [Lógica de transformación de datos en construcción]
-    
-    texto_final = "Aquí irá el texto estructurado listo para que lo muestres en la ventana emergente y lo copien."
-    
-    return {"texto_generado": texto_final}
+    # Estandarizamos los nombres de las columnas
+    df.columns = df.columns.str.strip().str.upper()
 
-# 2. Endpoint para el OCR de los horarios
-@app.post("/agregar-horarios-ocr/")
-async def agregar_horarios(imagen: UploadFile = File(...)):
-    # Recibiremos la imagen pegada en la web
-    contenido_imagen = await imagen.read()
+    # Lógica de prioridad: Tomar BROKER, si no hay, tomar CONSIGNATARIO
+    if 'BROKER' in df.columns and 'CONSIGNATARIO' in df.columns:
+        df['RESPONSABLE_REPORTE'] = df['BROKER'].fillna(df['CONSIGNATARIO'])
+    elif 'BROKER' in df.columns:
+        df['RESPONSABLE_REPORTE'] = df['BROKER']
+    else:
+        df['RESPONSABLE_REPORTE'] = df.get('CONSIGNATARIO', 'SIN ASIGNAR')
+
+    # Reemplazamos espacios vacíos
+    df = df.fillna("")
+
+    # Armamos el texto plano
+    texto_final = "--- REPORTE DE CONTENEDORES ---\n\n"
     
-    # [Aquí irá la conexión con Azure AI para leer la imagen]
-    # [Luego tomaremos ese texto y lo agregaremos al archivo Excel de Horarios Cedis]
-    
-    return {"mensaje": "Imagen recibida. Los horarios se están procesando y agregando al Excel..."}
+    for index, fila in df.iterrows():
+        contenedor = fila.get('CONTENEDOR', 'N/A')
+        responsable = fila.get('RESPONSABLE_REPORTE', 'N/A')
+        texto_final += f"CONTENEDOR: {contenedor} | RESPONSABLE: {responsable}\n"
+        
+    texto_final += "\n---------------------------------"
+
+    return {"texto_generado": texto_final}
